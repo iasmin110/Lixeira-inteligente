@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lixeira Inteligente</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            transition: background-color 0.5s ease;
+        }
+
+        header {
+            background-color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 40px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        header img {
+            width: 60px;
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+            gap: 20px;
+            margin: 0;
+            padding: 0;
+        }
+
+        nav ul li {
+            cursor: pointer;
+            font-weight: bold;
+            position: relative;
+        }
+
+        .tooltip .tooltip-text {
+            visibility: hidden;
+            opacity: 0;
+            width: 220px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            top: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            transition: opacity 0.3s;
+            font-size: 0.9em;
+        }
+
+        .tooltip .tooltip-text::after {
+            content: "";
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            margin-left: -6px;
+            border-width: 6px;
+            border-style: solid;
+            border-color: transparent transparent #333 transparent;
+        }
+
+        .tooltip:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        main {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 60px;
+        }
+
+        .caixa {
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            align-items: center;
+            gap: 20px;
+        }
+
+        .img-area img {
+            width: 200px;
+            height: auto;
+            border-radius: 8px;
+        }
+
+        .texto {
+            text-align: center;
+        }
+
+        .texto h2 {
+            margin-top: 0;
+        }
+
+        .porcentagem {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #0a7a33;
+            margin-top: 10px;
+            transition: color 0.3s ease;
+        }
+
+        .dias {
+            font-size: 1.2em;
+            color: #333;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            background-color: #2e8b57;
+            color: white;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background-color: #256c46;
+        }
+
+        canvas {
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <header> 
+        <img src="./img/LIXEIRA.webp" alt="Lixeira">
+        <nav>
+            <ul>
+                <li class="tooltip">
+                    Fale Conosco
+                    <span class="tooltip-text">Email: projetolixeirainteligente@gmail.com</span>
+                </li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <div class="caixa">
+            <div class="img-area">
+                <img src="./img/LIXEIRA.webp" alt="Imagem da Lixeira">
+            </div>
+            <div class="texto">
+                <h2>Lixeira Inteligente</h2>
+                <p>Acompanhe o nível de enchimento em tempo real:</p>
+                <p class="porcentagem">Carregando...</p>
+                <p class="dias">Dias sem trocar o lixo: <span id="contador">0</span></p>
+                <button onclick="resetarContador()"> Lixo trocado</button>
+            </div>
+            <canvas id="grafico" width="400" height="200"></canvas>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+    //  CONFIGURAÇÃO DO THINGSPEAK
+    const url = "https://api.thingspeak.com/channels/3147236/fields/1.json?api_key=3ADG2OUR7SU0P56E&results=10";
+
+    async function atualizarNivel() {
+        try {
+            const response = await fetch(url);
+            const dados = await response.json();
+
+            //  Pegando os valores mais recentes
+            const feeds = dados.feeds;
+            const ultimo = feeds[feeds.length - 1];
+            const nivel = parseInt(ultimo.field1);
+
+            const texto = document.querySelector(".porcentagem");
+            texto.textContent = `Lixeira ${nivel}% cheia`;
+
+            //  Muda as cores conforme o nível
+            if (nivel >= 80) {
+                texto.style.color = "#d32f2f";
+                document.body.style.backgroundColor = "#ffe5e5";
+            } else if (nivel >= 50) {
+                texto.style.color = "#f9a825";
+                document.body.style.backgroundColor = "#fff7d6";
+            } else {
+                texto.style.color = "#0a7a33";
+                document.body.style.backgroundColor = "#e9f7ef";
+            }
+
+            // Atualiza gráfico
+            const niveis = feeds.map(f => parseInt(f.field1));
+            const tempos = feeds.map(f => new Date(f.created_at).toLocaleTimeString("pt-BR", {hour: "2-digit", minute: "2-digit"}));
+            atualizarGrafico(tempos, niveis);
+
+        } catch (err) {
+            console.error("Erro ao buscar nível:", err);
+            document.querySelector(".porcentagem").textContent = "Erro ao carregar ";
+        }
+    }
+
+    //  Contador de dias sem trocar o lixo
+    function atualizarContador() {
+        const ultimoReset = localStorage.getItem("ultimaTroca");
+        const contadorEl = document.getElementById("contador");
+
+        if (ultimoReset) {
+            const ultimaData = new Date(ultimoReset);
+            const hoje = new Date();
+            const diff = Math.floor((hoje - ultimaData) / (1000 * 60 * 60 * 24));
+            contadorEl.textContent = diff;
+        } else {
+            contadorEl.textContent = 0;
+        }
+    }
+
+    function resetarContador() {
+        localStorage.setItem("ultimaTroca", new Date());
+        atualizarContador();
+        alert(" Contador zerado! Lixo trocado com sucesso!");
+    }
+
+    // 📈 Gráfico de histórico
+    let grafico;
+    function atualizarGrafico(labels, dados) {
+        const ctx = document.getElementById("grafico").getContext("2d");
+
+        if (grafico) grafico.destroy();
+
+        grafico = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Nível da lixeira (%)',
+                    data: dados,
+                    borderWidth: 2,
+                    borderColor: '#2e8b57',
+                    backgroundColor: 'rgba(46,139,87,0.2)',
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                scales: {
+                    y: { beginAtZero: true, max: 100 }
+                }
+            }
+        });
+    }
+
+    // ⏱ Atualiza tudo a cada 20 segundos
+    atualizarNivel();
+    atualizarContador();
+    setInterval(atualizarNivel, 20000);
+    setInterval(atualizarContador, 60000);
+    </script>
+</body>
+</html>
